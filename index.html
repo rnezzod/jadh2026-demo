@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Causal Structure Viewer</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap">
 <style>
@@ -24,7 +27,7 @@
     --card: #1a2130; --card-focus: #232f47; --card-focus-line: #5b9ee6; --card-text: #dfe3ea;
     --label-halo: #0e1117; --chip-text: #0e1117;
   }
-  body { background: var(--bg); color: var(--ink);
+  body { margin: 0; background: var(--bg); color: var(--ink);
          font-family: Arial, Helvetica, "Noto Sans JP", "Hiragino Sans", Meiryo, sans-serif; }
   .mono { }
   #app { display: flex; flex-direction: column; min-height: 100vh; }
@@ -68,9 +71,11 @@
   #legendbar .ln { width: 22px; height: 0; border-top: 3px solid; display: inline-block; }
   #legendbar .sep { color: var(--ink-3); }
   #legendbar .hint2 { color: var(--ink-3); }
-  #graphwrap { flex: 1 1 auto; overflow: auto; }
+  #graphwrap { flex: 1 1 auto; overflow: auto; -webkit-overflow-scrolling: touch;
+               touch-action: pan-x pan-y pinch-zoom; }
   #graphwrap svg { display: block; }
   .node { cursor: pointer; }
+  .node .hit { fill: transparent; stroke: none; }
   .node.dim { opacity: 0.72; }
   .nlabel { font-size: 12.5px; fill: var(--ink-2); pointer-events: none;
             stroke: var(--label-halo); stroke-width: 3px; paint-order: stroke; }
@@ -80,6 +85,8 @@
   #detail { flex: 0 0 320px; border-left: 1px solid var(--line); padding: 14px 16px;
             overflow-y: auto; display: none; }
   #detail.open { display: block; }
+  #detail .dclose { display: none; }
+  #mobilebar { display: none; }
   #detail h3 { font-size: 15px; line-height: 1.4; margin: 0 0 8px; }
   #detail .quote { font-size: 13px; color: var(--ink-2); border-left: 3px solid var(--line);
                    padding-left: 9px; margin: 8px 0; line-height: 1.5; }
@@ -103,18 +110,72 @@
   .pairrow .lang { font-weight: 700; font-size: 13px; flex: 0 0 24px; }
   .pairrow .txt { font-size: 14.5px; }
   .diffmark { color: var(--enabling); font-size: 12px; margin-left: 6px; }
+  /* view / story state (set on #app by render()) */
+  #app.v-pairs #graphwrap, #app.v-pairs #legendbar, #app.v-pairs #sidebar,
+  #app.v-pairs #edSeg, #app.v-pairs #scopeSeg, #app.v-pairs #mobilebar { display: none; }
+  #app.story #sidebar, #app.story #scopeSeg, #app.story #mobilebar .fbtn { display: none; }
   footer { padding: 10px 18px; border-top: 1px solid var(--line); color: var(--ink-3);
            font-size: 12px; line-height: 1.5; }
   a { color: var(--ja); }
 
+  /* ---------- Phone / small tablet (QR からのアクセス想定) ---------- */
   @media (max-width: 900px) {
+    header { padding: 10px 12px; gap: 8px; }
+    header h1 { font-size: 15px; flex: 1 1 100%; line-height: 1.3; }
+    header h1 span { display: none; }   /* サブタイトルはフッターに同内容があるので省略 */
+    header select { flex: 1 1 100%; font-size: 16px; padding: 7px 10px; } /* 16px: iOS のフォーカス時ズーム回避 */
+    .seg button { padding: 7px 10px; font-size: 13px; }
+    .lg-only { display: none; }
+
     main { flex-direction: column; }
-    #sidebar { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; gap: 12px;
-               border-right: 0; border-bottom: 1px solid var(--line); }
-    .fgroup { min-width: 150px; }
-    #detail { flex: 0 0 auto; border-left: 0; border-top: 1px solid var(--line);
-              max-height: 45vh; }
-    #graphwrap { max-height: 62vh; }
+    #counts { padding: 6px 12px; font-size: 12px; gap: 6px 12px; }
+    #counts .tot { display: none; } /* 抽出総数はスマホでは省略 */
+
+    /* フィルタ・凡例は折りたたみ（#mobilebar のボタンで開閉） */
+    #mobilebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+                 padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bar-2); }
+    #mobilebar button { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+                        border-radius: 6px; padding: 6px 11px; font-size: 13px; cursor: pointer; }
+    #mobilebar button.on { background: var(--seg-on); font-weight: 600; border-color: var(--ink-3); }
+    #mobilebar .swipe { color: var(--ink-3); font-size: 12px; margin-left: auto; }
+    #sidebar { display: none; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; gap: 10px 18px;
+               padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #app.filters-open:not(.v-pairs):not(.story) #sidebar { display: flex; }
+    .fgroup { min-width: 130px; }
+    .fgroup label { padding: 5px 0; font-size: 14px; }   /* タップしやすい行間 */
+    .fgroup input { width: 18px; height: 18px; }
+    #sidebar .hint { flex: 1 1 100%; }
+    #legendbar { display: none; padding: 8px 12px; gap: 6px 14px; font-size: 12px; }
+    #app.legend-open:not(.v-pairs) #legendbar { display: flex; }
+    #legendbar .sep { display: none; }
+    #legendbar .lg b { flex: 1 1 100%; }
+
+    #storyBar { padding: 6px 12px; font-size: 13px; flex-wrap: wrap; }
+    #graphwrap { height: calc(100vh - 120px); height: calc(100dvh - 120px); max-height: none; }
+
+    /* 詳細パネル = ボトムシート */
+    #detail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+              max-height: 50vh; border-left: 0; border-top: 1px solid var(--line);
+              border-radius: 14px 14px 0 0; background: var(--bg);
+              box-shadow: 0 -6px 24px rgba(0,0,0,0.18);
+              padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+    #detail::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px;
+                      background: var(--line); margin: 0 auto 10px; }
+    #detail .dclose { display: flex; position: absolute; top: 10px; right: 10px; width: 36px; height: 36px;
+                      align-items: center; justify-content: center; border-radius: 50%;
+                      background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+                      font-size: 20px; line-height: 1; cursor: pointer; }
+    #detail h3 { padding-right: 40px; font-size: 14.5px; }
+    #detail .storybtn { padding: 9px 14px; font-size: 14px; }
+
+    #pairs { padding: 12px; }
+    .paircard { padding: 12px; }
+    .pairrow .txt { font-size: 14px; }
+    footer { font-size: 11px; padding: 10px 12px; }
+  }
+  @media (max-width: 480px) {
+    .seg button { padding: 7px 8px; font-size: 12.5px; }
+    #detail { max-height: 52vh; }
   }
 </style>
 
@@ -124,15 +185,15 @@
     <select id="topicSel"></select>
     <div class="seg" id="viewSeg">
       <button data-v="graph" class="on">Graph</button>
-      <button data-v="pairs">Aligned pairs (JA–EN)</button>
+      <button data-v="pairs">Aligned pairs<span class="lg-only"> (JA–EN)</span></button>
     </div>
     <div class="seg" id="edSeg">
-      <button data-e="ja" class="on">JA edition</button>
-      <button data-e="en">EN edition</button>
+      <button data-e="ja" class="on">JA<span class="lg-only"> edition</span></button>
+      <button data-e="en">EN<span class="lg-only"> edition</span></button>
     </div>
     <div class="seg" id="scopeSeg">
-      <button data-s="major" class="on">Major events</button>
-      <button data-s="full">All events</button>
+      <button data-s="major" class="on">Major<span class="lg-only"> events</span></button>
+      <button data-s="full">All<span class="lg-only"> events</span></button>
     </div>
   </header>
 
@@ -141,6 +202,11 @@
 
     <div id="stage">
       <div id="counts"></div>
+      <div id="mobilebar">
+        <button class="fbtn" id="filtersBtn">Filters</button>
+        <button id="legendBtn">Legend</button>
+        <span class="swipe">swipe ↔ · tap a node</span>
+      </div>
       <div id="legendbar">
         <span class="lg"><b style="color:var(--ink)">Node fill = perspective:</b></span>
         <span class="lg"><span class="dot" style="background:var(--agent)"></span>agent</span>
@@ -195,6 +261,29 @@ const AXIS_LABEL = {p: 'perspective', s: 'presupposition', t: 'relation type', w
 const state = {topic: null, view: 'graph', edition: 'ja', scope: 'major',
                filters: {}, selected: null, story: null};
 
+const MOBILE_MQ = window.matchMedia('(max-width: 900px)');
+function isMobile() { return MOBILE_MQ.matches; }
+
+/* スマホではフィルタ欄を #stage 内（Filters ボタンの直下）へ、PC では main の左列へ置く。 */
+function placeSidebar() {
+  const sb = document.getElementById('sidebar');
+  const stage = document.getElementById('stage');
+  if (isMobile()) {
+    const legend = document.getElementById('legendbar');
+    if (sb.nextElementSibling !== legend) stage.insertBefore(sb, legend);
+  } else if (sb.parentElement !== document.querySelector('main')) {
+    document.querySelector('main').insertBefore(sb, stage);
+  }
+}
+
+/* #graphwrap のうちボトムシート（#detail）に隠れていない高さ。PC では全高。 */
+function visibleGraphHeight(wrap) {
+  const d = document.getElementById('detail');
+  if (!isMobile() || !d.classList.contains('open')) return wrap.clientHeight;
+  const covered = Math.max(0, wrap.getBoundingClientRect().bottom - d.getBoundingClientRect().top);
+  return Math.max(wrap.clientHeight * 0.3, wrap.clientHeight - covered);
+}
+
 function esc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
 function init() {
@@ -234,8 +323,20 @@ function init() {
   } catch (e) { /* ignore malformed hash */ }
 
   document.getElementById('storyBack').onclick = () => { state.story = null; render(); };
+  const app = document.getElementById('app');
+  const tog = (btnId, cls) => {
+    const b = document.getElementById(btnId);
+    b.onclick = () => { b.classList.toggle('on', app.classList.toggle(cls)); };
+  };
+  tog('filtersBtn', 'filters-open');
+  tog('legendBtn', 'legend-open');
+  document.getElementById('detail').addEventListener('click', ev => {
+    if (ev.target.closest('.dclose')) { state.selected = null; render(); }
+  });
 
   buildSidebar();
+  placeSidebar();
+  MOBILE_MQ.addEventListener('change', () => { placeSidebar(); render(); });
   render();
 }
 
@@ -300,17 +401,15 @@ function shortLabel(e, maxLen) {
 
 function render() {
   const graphMode = state.view === 'graph';
-  document.getElementById('graphwrap').style.display = graphMode ? 'block' : 'none';
-  document.getElementById('legendbar').style.display = graphMode ? 'flex' : 'none';
+  const app = document.getElementById('app');
+  app.classList.toggle('v-pairs', !graphMode);
+  app.classList.toggle('story', graphMode && !!state.story);
   document.getElementById('pairs').classList.toggle('open', !graphMode);
-  document.getElementById('sidebar').style.display = (graphMode && !state.story) ? 'flex' : 'none';
-  document.getElementById('edSeg').style.display = graphMode ? 'inline-flex' : 'none';
-  document.getElementById('scopeSeg').style.display = (graphMode && !state.story) ? 'inline-flex' : 'none';
   document.getElementById('storyBar').classList.toggle('on', graphMode && !!state.story);
+  renderDetail();   // 先に描く: モバイルのボトムシート高さをグラフのスクロール位置計算で使う
   if (!graphMode) { renderPairs(); }
   else if (state.story) { renderStory(state.story); }
   else { renderTimeline(); }
-  renderDetail();
 }
 
 /* ============================================================
@@ -341,7 +440,7 @@ function renderTimeline() {
 
   document.getElementById('counts').innerHTML =
     `<span><b>${esc(DATA[state.topic].label)}</b> — ${state.edition.toUpperCase()} edition</span>` +
-    `<span>${ed.events.length} events, ${ed.causals.length} links extracted</span>` +
+    `<span class="tot">${ed.events.length} events, ${ed.causals.length} links extracted</span>` +
     `<span>showing ${shownIds.length} events, ${edges.length} links` +
     (state.scope === 'major' ? ' (top-degree subset)' : '') + `</span>`;
 
@@ -398,6 +497,7 @@ function renderTimeline() {
     const r = 5 + Math.min(deg[id] || 0, 8) * 1.1;
     const selDim = state.selected && state.selected !== id ? 'dim' : '';
     s += `<g class="node ${selDim}" data-id="${id}">
+      <circle class="hit" cx="${x}" cy="${y}" r="${Math.max(r + 6, 16)}"/>
       <circle cx="${x}" cy="${y}" r="${r}" fill="${PCOL[e.p]||'var(--neutral)'}"
               stroke="${SCOL[e.s]||'var(--neutral)'}" stroke-width="2.6"><title>${esc(e.d)}</title></circle>`;
     const showLabel = major || (deg[id] || 0) >= 5 || state.selected === id;
@@ -418,7 +518,7 @@ function renderTimeline() {
   });
   if (state.selected && layout.pos[state.selected]) {
     wrap.scrollLeft = Math.max(0, X(state.selected) - wrap.clientWidth / 2);
-    wrap.scrollTop = Math.max(0, Y(state.selected) - wrap.clientHeight / 2);
+    wrap.scrollTop = Math.max(0, Y(state.selected) - visibleGraphHeight(wrap) / 2);
   }
 }
 
@@ -560,6 +660,7 @@ function renderStory(focusId) {
   });
   if (posOf[focusId]) {
     wrap.scrollLeft = Math.max(0, posOf[focusId][0] - wrap.clientWidth / 2 + cardW / 2);
+    wrap.scrollTop = Math.max(0, posOf[focusId][1] - visibleGraphHeight(wrap) / 2 + cardH / 2);
   }
 }
 
@@ -585,6 +686,7 @@ function renderDetail() {
       <span class="mono" style="color:var(--ink-3); font-size:11px">${esc(c.t)} · ${esc(c.w)} · ${esc(c.m)}</span><br>
       <span style="color:var(--ink-3)">${esc(c.ev || '')}</span></div>`;
   panel.innerHTML = `
+    <button class="dclose" aria-label="Close">×</button>
     <h3>${esc(e.id)} · ${esc(e.d)}</h3>
     <div>${chip(e.p, PCOL, false)} ${chip(e.s, SCOL, true)}
       <span class="mono" style="color:var(--ink-3); font-size:11px"> ${esc(e.date || '')}</span></div>
